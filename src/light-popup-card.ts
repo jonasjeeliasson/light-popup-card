@@ -189,7 +189,7 @@ class LightPopupCard extends LitElement {
                       : Math.round(stateObj.attributes.brightness / 2.55)}"
                     @input=${(e) => this._previewBrightness(e.target.value)}
                     @change=${(e) =>
-                      this._setBrightness(stateObj, e.target.value)}
+                      this._setBrightnessWithGroupSupport(stateObj, e.target.value)}
                   />
                 </div>
               `
@@ -395,16 +395,36 @@ class LightPopupCard extends LitElement {
     }
   }
 
-  _setBrightness(state, value) {
+  _setBrightnessWithGroupSupport(state, value) {
+    var changeOnlyOn = "changeOnlyOn" in this.config ? this.config.changeOnlyOn : false;
+    var offStates = this.config.offStates ? this.config.offStates : ['off'];
+
+    if (
+      changeOnlyOn &&
+      state.attributes.entity_id &&
+      Array.isArray(state.attributes.entity_id) &&
+      !offStates.includes(this.hass.states[state.entity_id].state)
+    ) {
+      const entityIdsForLightsOn = state.attributes.entity_id
+        .map(entity_id => this.hass.states[entity_id] || {})
+        .filter(({ state }) => state === "on")
+        .map(({entity_id}) => entity_id)
+      this._setBrightness(entityIdsForLightsOn, value)
+    } else {
+      this._setBrightness(state.entity_id, value)
+    }
+  }
+
+  _setBrightness(entityIds, value) {
     if (this.brightnessTransitionEnabled) {
       this.hass.callService("homeassistant", "turn_on", {
-        entity_id: state.entity_id,
+        entity_id: entityIds,
         brightness: value * 2.55,
         transition: this.brightnessTransitionTime,
       });
     } else {
       this.hass.callService("homeassistant", "turn_on", {
-        entity_id: state.entity_id,
+        entity_id: entityIds,
         brightness: value * 2.55,
       });
     }
